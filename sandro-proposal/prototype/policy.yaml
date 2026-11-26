@@ -1,0 +1,47 @@
+# SAMPLE agri-loan checklist for the prototype.
+# The clause IDs are PLACEHOLDERS. They are not from any real bank's policy or from BSP
+# rules. Replace this file with the pilot bank's actual policy before any real use.
+#
+# accepts:      document types the extractor may assign (see DOC_TYPES in app.py)
+# name_match:   the name on the document must match the applicant
+# expiry:       if the document shows an expiry date, it must not be in the past
+# max_age_days: the issue date must be no older than this many days
+
+items:
+  - id: identity
+    label: Valid government ID
+    clause: POL-AGRI-1.1
+    accepts: [national_id, other_gov_id]
+    name_match: true
+    expiry: true
+
+  - id: farm_tenure
+    label: Proof of farm tenure (title, tax declaration, lease, or barangay farmer certification)
+    clause: POL-AGRI-1.2
+    accepts: [land_title, tax_declaration, lease_agreement, barangay_farmer_cert]
+    name_match: true
+
+  - id: farmer_registration
+    label: RSBSA farmer registration certificate
+    clause: POL-AGRI-1.3
+    accepts: [rsbsa_certificate]
+    name_match: true
+
+  - id: barangay_clearance
+    label: Barangay clearance issued within the last 6 months
+    clause: POL-AGRI-1.4
+    accepts: [barangay_clearance]
+    name_match: true
+    max_age_days: 180
+
+  - id: income_evidence
+    label: Income evidence (GCash/e-wallet statement or buyer receipts)
+    clause: POL-AGRI-1.5
+    accepts: [gcash_statement, buyer_receipt]
+    name_match: true
+
+  - id: application_form
+    label: Signed loan application form
+    clause: POL-AGRI-1.6
+    accepts: [loan_application]
+    name_match: true

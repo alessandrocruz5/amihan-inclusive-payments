@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agri Loan Gap List</title>
+<style>
+  :root { --bg:#f6f5f0; --fg:#1d1d1b; --muted:#66655f; --card:#fff; --line:#dedcd2;
+          --ok:#1d7a46; --warn:#a15c00; --bad:#b3261e; --accent:#2c5fa8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161614; --fg:#ececE6; --muted:#a3a29a; --card:#20201d; --line:#383731;
+            --ok:#5fcf8c; --warn:#f0b04a; --bad:#ff8b82; --accent:#8db6f2; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.45 system-ui,sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; } h2 { font-size:1.05rem; margin:0 0 10px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-weight:600; margin-bottom:6px; }
+  input[type=text] { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;
+                     background:var(--bg); color:var(--fg); font:inherit; }
+  #drop { border:2px dashed var(--line); border-radius:10px; padding:22px; text-align:center; color:var(--muted); margin-top:14px; }
+  #drop.over { border-color:var(--accent); }
+  #names { margin:10px 0 0; padding-left:18px; color:var(--muted); font-size:.9rem; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+  button { padding:10px 16px; border-radius:8px; border:1px solid var(--accent); background:var(--accent);
+           color:#fff; font:inherit; cursor:pointer; }
+  button.alt { background:transparent; color:var(--accent); }
+  button:disabled { opacity:.5; cursor:wait; }
+  #banner { padding:8px 12px; border-radius:8px; margin-bottom:16px; font-size:.9rem; background:var(--card); border:1px solid var(--line); }
+  #banner.offline { border-color:var(--warn); color:var(--warn); }
+  #banner.none { border-color:var(--bad); color:var(--bad); }
+  #err { color:var(--bad); margin-top:12px; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:99px; font-size:.8rem; font-weight:600; border:1px solid currentColor; white-space:nowrap; }
+  .present { color:var(--ok); } .problem { color:var(--warn); } .missing { color:var(--bad); }
+  pre { white-space:pre-wrap; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px; font:inherit; font-size:.92rem; }
+  details summary { cursor:pointer; color:var(--muted); }
+  .note { color:var(--muted); font-size:.85rem; }
+  [hidden] { display:none !important; }
+  @media (max-width:560px) { .hide-sm { display:none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Agri loan: gap list</h1>
+  <p class="sub">Upload the farmer's documents. Get one list of everything missing or wrong, so the borrower returns once.</p>
+  <div id="banner" hidden></div>
+
+  <section class="card" id="intake">
+    <label for="who">Applicant's full name</label>
+    <input id="who" type="text" placeholder="e.g. Juan M. Dela Cruz" maxlength="120" autocomplete="off">
+    <div id="drop">Drop photos, scans or PDFs here, or <a href="#" id="pick">choose files</a>
+      <input id="files" type="file" multiple accept="image/*,application/pdf" hidden>
+      <ol id="names"></ol>
+    </div>
+    <div class="row">
+      <button id="go">Check file</button>
+      <button id="sample" class="alt" type="button">Use the synthetic sample set</button>
+    </div>
+    <div id="err" role="alert"></div>
+  </section>
+
+  <section id="result" hidden>
+    <div class="card">
+      <h2 id="summary"></h2>
+      <table>
+        <thead><tr><th>Requirement</th><th>Status</th><th>Detail</th><th class="hide-sm">Clause</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="note">Clause IDs are placeholders from the sample policy, not a real bank's policy.</p>
+      <p id="unrec" class="note"></p>
+    </div>
+    <div class="card">
+      <h2>Message for the borrower</h2>
+      <pre id="text"></pre>
+      <button id="copy" class="alt">Copy gap list</button>
+    </div>
+    <div class="card">
+      <details><summary>What the reader extracted from each file</summary>
+        <table><thead><tr><th>File</th><th>Type</th><th>Legible</th><th>Name</th><th class="hide-sm">Dates</th></tr></thead>
+        <tbody id="docs"></tbody></table>
+      </details>
+    </div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let picked = [];
+
+fetch('/status').then(r => r.json()).then(s => {
+  const b = $('banner'); b.hidden = false;
+  if (s.mode === 'live') { b.textContent = 'Live: documents are read by ' + s.model + '. Use synthetic documents only until data-handling is approved.'; }
+  else if (s.mode === 'offline') { b.className = 'offline'; b.textContent = 'OFFLINE DEMO: answers come from sample sidecar files, not a model. Only the synthetic sample set works.'; }
+  else { b.className = 'none'; b.textContent = 'No reader configured. Set ANTHROPIC_API_KEY (live) or start with DEMO_OFFLINE=1 (demo).'; }
+  $('sample').hidden = !s.samples.length;
+});
+
+function showNames() {
+  const ol = $('names'); ol.replaceChildren();
+  picked.forEach(f => { const li = document.createElement('li'); li.textContent = f.name; ol.appendChild(li); });
+}
+function addFiles(list) { picked = picked.concat([...list]); showNames(); }
+$('pick').onclick = e => { e.preventDefault(); $('files').click(); };
+$('files').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+const drop = $('drop');
+['dragover','dragenter'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+
+async function run(useSamples) {
+  $('err').textContent = '';
+  const name = $('who').value.trim();
+  if (!name) { $('err').textContent = "Enter the applicant's name."; return; }
+  if (!useSamples && !picked.length) { $('err').textContent = 'Add at least one document.'; return; }
+  const fd = new FormData();
+  fd.append('applicant', name);
+  if (useSamples) fd.append('use_samples', '1'); else picked.forEach(f => fd.append('files', f));
+  $('go').disabled = $('sample').disabled = true; $('go').textContent = 'Checking...';
+  try {
+    const r = await fetch('/check', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || 'Something went wrong.');
+    render(j);
+  } catch (e) { $('err').textContent = e.message; }
+  finally { $('go').disabled = $('sample').disabled = false; $('go').textContent = 'Check file'; }
+}
+$('go').onclick = () => run(false);
+$('sample').onclick = () => { $('who').value = 'Juan M. Dela Cruz'; run(true); };
+
+function cell(tr, text, cls) {
+  const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; tr.appendChild(td); return td;
+}
+function render(j) {
+  const c = j.counts, total = j.items.length;
+  $('summary').textContent = c.present + ' of ' + total + ' requirements met' +
+    (c.problem + c.missing ? ' - ' + c.missing + ' missing, ' + c.problem + ' need replacing' : '');
+  const rows = $('rows'); rows.replaceChildren();
+  j.items.forEach(i => {
+    const tr = document.createElement('tr');
+    cell(tr, i.label);
+    const td = document.createElement('td'); const p = document.createElement('span');
+    p.className = 'pill ' + i.status; p.textContent = {present:'Present', problem:'Problem', missing:'Missing'}[i.status];
+    td.appendChild(p); tr.appendChild(td);
+    cell(tr, i.status === 'present' ? i.file : (i.file ? i.reason + ' (' + i.file + ')' : i.reason));
+    cell(tr, i.clause).classList.add('hide-sm');
+    rows.appendChild(tr);
+  });
+  $('unrec').textContent = j.unrecognised.length ? 'Not matched to any requirement: ' + j.unrecognised.join(', ') : '';
+  $('text').textContent = j.text;
+  const dt = $('docs'); dt.replaceChildren();
+  Object.entries(j.documents).forEach(([n, d]) => {
+    const tr = document.createElement('tr');
+    cell(tr, n); cell(tr, d.doc_type); cell(tr, d.legible ? 'yes' : 'no' + (d.legibility_note ? ': ' + d.legibility_note : ''));
+    cell(tr, d.name_on_document || '-');
+    cell(tr, [d.issue_date && 'issued ' + d.issue_date, d.expiry_date && 'expires ' + d.expiry_date].filter(Boolean).join(', ') || '-').classList.add('hide-sm');
+    dt.appendChild(tr);
+  });
+  $('result').hidden = false; $('result').scrollIntoView({behavior:'smooth'});
+}
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('text').textContent); $('copy').textContent = 'Copied'; }
+  catch { $('copy').textContent = 'Select the text and copy'; }
+  setTimeout(() => $('copy').textContent = 'Copy gap list', 1800);
+};
+</script>
+</body>
+</html>

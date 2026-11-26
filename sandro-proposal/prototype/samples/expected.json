@@ -1,0 +1,14 @@
+{
+  "applicant": "Juan M. Dela Cruz",
+  "status": {
+    "identity": "problem",
+    "farm_tenure": "present",
+    "farmer_registration": "present",
+    "barangay_clearance": "problem",
+    "income_evidence": "present",
+    "application_form": "missing"
+  },
+  "unrecognised": [
+    "06_unrelated_photo.png"
+  ]
+}
