@@ -1,7 +1,7 @@
 ---
 type: plan
 kind: feature
-status: draft
+status: audited
 repo: amihan-inclusive-payments
 delivery: local
 base:
@@ -20,7 +20,7 @@ tags: [plan]
 
 | # | Requirement |
 |---|---|
-| R1 | Harden the prototype (`sandro-proposal/prototype/`) so it is safe and robust on a public URL. That covers input coercion, upload and time limits, error handling, security headers, no public API docs, and an offline test suite. |
+| R1 | Harden the prototype (`ruri-bot/prototype/`) so it is safe and robust on a public URL. That covers input coercion, upload and time limits, error handling, security headers, no public API docs, and an offline test suite. |
 | R2 | Deploy it to a live URL on **Vercel**. |
 | R3 | Use **Neon Postgres** for an audit log of each check (no files) and to enforce cost caps. |
 | R4 | Use **GitHub** as the deploy source: Vercel Git integration (preview per PR, production on `main`) plus a CI workflow that gates PRs. |
@@ -28,18 +28,18 @@ tags: [plan]
 | R6 | Public live access, no login. Abuse and cost are bounded by a global daily cap and a per-client hourly cap (Decision D2). |
 
 ## Context used
-- `sandro-proposal/PROBLEM.md` §5–6: the outputs must be auditable (sourced, reproducible). Borrower data is sensitive personal information under the DPA. Human-in-the-loop is mandatory. Thin IT and low connectivity is the main constraint (light pages, resumable uploads).
-- `sandro-proposal/PROBLEM.md` §8 Q5: whether borrower data may go to a cloud model is **still open**. This is the basis for keeping "synthetic data only".
-- `sandro-proposal/prototype/README.md`: run modes `live`, `offline` and `none`. "Not in the prototype: auth, storage, resumable uploads…"
-- `sandro-proposal/chat.md` (build session): the model only reads documents and `policy.yaml` decides what is required. Haiku was chosen for cost. The production stack was explicitly not chosen yet.
-- Code: `sandro-proposal/prototype/app.py:31-35`: policy loaded at import. `MAX_BYTES=10MB` per file and 12 files, which exceeds Vercel's 4.5 MB request-body limit.
+- `ruri-bot/PROBLEM.md` §5–6: the outputs must be auditable (sourced, reproducible). Borrower data is sensitive personal information under the DPA. Human-in-the-loop is mandatory. Thin IT and low connectivity is the main constraint (light pages, resumable uploads).
+- `ruri-bot/PROBLEM.md` §8 Q5: whether borrower data may go to a cloud model is **still open**. This is the basis for keeping "synthetic data only".
+- `ruri-bot/prototype/README.md`: run modes `live`, `offline` and `none`. "Not in the prototype: auth, storage, resumable uploads…"
+- `ruri-bot/chat.md` (build session): the model only reads documents and `policy.yaml` decides what is required. Haiku was chosen for cost. The production stack was explicitly not chosen yet.
+- Code: `ruri-bot/prototype/app.py:31-35`: policy loaded at import. `MAX_BYTES=10MB` per file and 12 files, which exceeds Vercel's 4.5 MB request-body limit.
 - Code: `app.py:101-108` `read_live`: Anthropic client has no timeout or retry settings.
 - Code: `app.py:119-129` `clean`: `bool("false")` is `True`. A non-string `name_on_document` or date passes through, and `names_match`/`parse_date` then raise outside the per-file `try` (`app.py:269`). That is a 500 for the whole check.
 - Code: `app.py:236-272` `/check`: `async def` doing blocking thread-pool work on the event loop. Uses `date.today()`, which is UTC on Vercel, not PH time.
 - Code: `app.py:55` `FastAPI(...)` exposes `/docs` and `/openapi.json` publicly.
 - Code: `static/index.html:113-129` `run()`: calls `r.json()` on every response, so a non-JSON 413/500/504 from Vercel shows "Unexpected token…".
 - Code: `check_samples.py:17-18`: builds the `/check` multipart by hand. It's coupled to the form fields.
-- Repo: no `.gitignore`. `__pycache__/app.cpython-315.pyc` and `sandro-proposal/.DS_Store` are tracked. Local `.venv` is Python 3.15 and requirements are unpinned.
+- Repo: no `.gitignore`. `__pycache__/app.cpython-315.pyc` and `ruri-bot/.DS_Store` are tracked. Local `.venv` is Python 3.15 and requirements are unpinned.
 - Vercel docs (search via the Vercel MCP): FastAPI zero-config detects `app.py` → `app`. `.python-version` sets the runtime. `vercel.json` `functions["app.py"].maxDuration` and `excludeFiles`. `public/` is served by the CDN. The Neon Marketplace integration injects `DATABASE_URL` per environment.
 - Tools on this machine: `uv`, `gh` (authenticated) and `psql` are present. The `vercel` and `neonctl` CLIs are not installed. The Vercel MCP is connected in Claude. The Neon and GitHub MCPs are **not** connected yet.
 - No graph (`graphify-out/` absent). The repo is ~600 lines, so grep was enough.
@@ -71,6 +71,12 @@ The one real design choice is how uploads get past Vercel's 4.5 MB request body 
 - **D9 Region = Vercel `sin1` + Neon `aws-ap-southeast-1` (Singapore)**, the closest to PH users. Keeping both in one region avoids a cross-ocean DB round trip.
 - **D10 Time budget.** Anthropic client `timeout=25s, max_retries=1`. Thread pool 6 workers (12 docs = 2 waves). `maxDuration=120` s.
 - **D11 Use the PH date for rules.** `date.today()` → today in UTC+8 (fixed offset; PH has no DST, and it needs no tzdata).
+- **D12 Branch protection is best-effort** *(audit)*. The repo is private, and a free GitHub plan can't enforce required checks on private repos. If 08 step 7 is refused, CI is advisory until the plan is upgraded or the repo goes public. That's the user's call; don't flip visibility silently.
+- **D13 Previews are protected** *(audit)*. Vercel Authentication guards preview deployments by default. Smoke-test previews with GET requests through Vercel MCP `web_fetch_vercel_url`: `/status` lists `samples` (proves `samples/` is bundled) and `/` returns 200 + CSP (proves `static/`). The POST `check_samples.py` runs against production only.
+- **D14 Accurate data notice** *(audit, DPA transparency)*. The page and README say documents are sent to Anthropic's Claude API and processed under its API data terms; **this app** does not store them. Never "not stored" unqualified.
+- **D15 No unsalted IP hashes on Vercel** *(audit)*. Missing `IP_HASH_SALT` on Vercel: live → 503 (D6); offline → skip the audit row and log a warning.
+- **D16 Accepted trade-off** *(audit)*: with no files stored (D3), a check isn't byte-for-byte reproducible (PROBLEM.md §6). The model id, `policy_sha`, `prompt_sha` and extractions are kept.
+- **D17 Vercel plan tier** *(audit)*: Hobby is non-commercial only. Confirm Hobby vs Pro with the user before 08 creates the project.
 
 **Assumptions:** (for `/audit-plan` to challenge)
 - Vercel rejects request bodies above **4.5 MB** before the app runs, so the app caps the total at **4,000,000 bytes** to leave room for multipart overhead.
@@ -79,18 +85,18 @@ The one real design choice is how uploads get past Vercel's 4.5 MB request body 
 - Vercel Hobby allows one function region (`"regions": ["sin1"]`) and `maxDuration` 120 under Fluid compute.
 - The Neon Marketplace integration exposes `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED`. The app uses the pooled one; `migrate.py` prefers the unpooled one.
 - `psycopg[binary]` 3.x has wheels for CPython 3.12 (it does for macOS arm64 and manylinux).
-- Rebuilding `sandro-proposal/prototype/.venv` (untracked) on 3.12 is acceptable. The user's current 3.15 venv is replaced.
-- The repo will stay **public** on GitHub. Nothing secret is committed. `.env.example` holds names only.
+- Rebuilding `ruri-bot/prototype/.venv` (untracked) on 3.12 is acceptable. The user's current 3.15 venv is replaced.
+- The GitHub repo is **private** (`gh repo view` → PRIVATE, checked 2026-11-26). Nothing secret is committed; `.env.example` holds names only.
 
-**Non-goals:** auth or login; an MCP server inside the app; storing documents (Blob); resumable or per-document uploads (Option B); cash-flow, cross-checks, LOS data (PROBLEM.md v2); moving the app out of `sandro-proposal/prototype/`; a custom domain; Filipino-language output; a rate-limit WAF rule; changing `policy.yaml` or the extraction prompt text.
+**Non-goals:** auth or login; an MCP server inside the app; storing documents (Blob); resumable or per-document uploads (Option B); cash-flow, cross-checks, LOS data (PROBLEM.md v2); moving the app out of `ruri-bot/prototype/`; a custom domain; Filipino-language output; a rate-limit WAF rule; changing `policy.yaml` or the extraction prompt text.
 
 ## Change list
-Paths are relative to the repo root. `P/` = `sandro-proposal/prototype/`.
+Paths are relative to the repo root. `P/` = `ruri-bot/prototype/`.
 
 | File | Action | Why | Req | Prompt |
 |---|---|---|---|---|
 | `.gitignore` | C | Stop tracking venv, pyc, .DS_Store, .env*, .vercel | R1, R4 | 01 |
-| `P/__pycache__/app.cpython-315.pyc`, `sandro-proposal/.DS_Store` | D (untrack) | Build junk in git | R4 | 01 |
+| `P/__pycache__/app.cpython-315.pyc`, `ruri-bot/.DS_Store` | D (untrack) | Build junk in git | R4 | 01 |
 | `P/.python-version` | C | Pin the Vercel and CI runtime to 3.12 | R2, D8 | 01 |
 | `P/requirements.txt` | M | Pin exact versions (01); add `psycopg[binary]` (03) | R1, R3 | 01, 03 |
 | `P/requirements-dev.txt` | C | pytest and the TestClient dependency | R1, D4 | 01 |
@@ -130,6 +136,10 @@ Paths are relative to the repo root. `P/` = `sandro-proposal/prototype/`.
 | Env keys | Non-graph | `ANTHROPIC_API_KEY`, `DEMO_OFFLINE`, `CASE_MODEL`, new `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `IP_HASH_SALT`, `DAILY_DOC_CAP`, `IP_HOURLY_DOC_CAP`, platform `VERCEL_ENV` | Must match across `app.py`, `db.py`, `.env.example`, README, Vercel env, CI | 06/07 list them; 08 sets them |
 | DB table `checks`, `schema_migrations` | Non-graph | `db.py` SQL ↔ `db/001_checks.sql` | New, so nothing else reads them | 03 tests run against the real schema |
 | Vercel bundle | Platform | `vercel.json` `excludeFiles` | Excluding `static/` or `samples/` would break `/` and the sample button | 06 excludes only `tests/**`; 08 smoke-tests both |
+| `static/index.html:93` `/status` fetch | Direct (missed; audit) | unguarded `r.json()` | A non-JSON/500 `/status` hides the banner silently | 04 change 6 guards it |
+| 500 responses | Platform (missed; audit) | Starlette `ServerErrorMiddleware` is outside the http middleware | Security headers missing on 500s | 02 sets them in the 500 handler too |
+| GitHub branch protection | Ops (missed; audit) | Repo is private | Required checks may be unavailable | D12 |
+| Preview smoke test | Ops (missed; audit) | Vercel Authentication on previews | `check_samples.py <preview>` would 401 | D13 |
 
 **Known risks in the touched area:**
 - PROBLEM.md §6/§8 Q5: cloud-model processing of borrower data is **unapproved**. The live URL must stay synthetic-only (D2 guards).
@@ -155,7 +165,7 @@ Every prompt runs sequentially: they share `app.py`, `requirements.txt`, the tes
 
 ## End-to-end verification
 ```bash
-cd sandro-proposal/prototype
+cd ruri-bot/prototype
 # ## Commands (D4)
 .venv/bin/python -m pytest -q
 .venv/bin/python -m compileall -q -x '\.venv' .
@@ -172,13 +182,13 @@ TEST_DATABASE_URL="$TEST_DATABASE_URL" .venv/bin/python -m pytest -q tests/test_
 
 # R4: CI green on the PR, and required on main
 gh run list --workflow ci.yml --limit 1
-gh api repos/alessandrocruz5/amihan-inclusive-payments/branches/main/protection --jq '.required_status_checks.contexts'
+gh api repos/alessandrocruz5/amihan-inclusive-payments/branches/main/protection --jq '.required_status_checks.contexts'   # only if the GitHub plan allows protection on private repos (D12)
 
 # R2/R5: live URL (after 08)
 .venv/bin/python check_samples.py https://<prod-domain>            # PASS, mode=live
 curl -s https://<prod-domain>/status                              # mode live, policy_sha present
 curl -s -o /dev/null -w '%{http_code}\n' https://<prod-domain>/docs   # 404
-curl -s https://<preview-domain>/status                           # mode offline (no key on previews)
+# preview is protected (D13): Vercel MCP web_fetch_vercel_url <preview>/status → mode offline, six samples listed
 ```
 
 ## Rollback
@@ -189,3 +199,5 @@ curl -s https://<preview-domain>/status                           # mode offline
 
 ## Log
 - 2026-11-26: planned
+- 2026-11-26: paths updated for the `sandro-proposal/` → `ruri-bot/` rename (commit 00b9aa1)
+- 2026-11-26: audited (PASS-WITH-CHANGES), 12 fixes applied (5 FIX + 7 NOTE); 1 NOTE recorded as a decision (D16)

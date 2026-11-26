@@ -10,12 +10,12 @@ depends_on: [01]
 parallel_group: C
 files:
   create:
-    - sandro-proposal/prototype/db/001_checks.sql
-    - sandro-proposal/prototype/db.py
-    - sandro-proposal/prototype/migrate.py
-    - sandro-proposal/prototype/tests/test_db.py
+    - ruri-bot/prototype/db/001_checks.sql
+    - ruri-bot/prototype/db.py
+    - ruri-bot/prototype/migrate.py
+    - ruri-bot/prototype/tests/test_db.py
   modify:
-    - sandro-proposal/prototype/requirements.txt
+    - ruri-bot/prototype/requirements.txt
   delete: []
 ---
 # 03 · Neon data layer + migration
@@ -27,7 +27,7 @@ wire it into `app.py`; prompt 05 does that.
 
 ## Context
 - Repo root: `/Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments`. App dir `P/` =
-  `sandro-proposal/prototype/`. Python 3.12 venv `P/.venv`. Install with
+  `ruri-bot/prototype/`. Python 3.12 venv `P/.venv`. Install with
   `uv pip install --python .venv/bin/python -r requirements-dev.txt` (it includes `-r requirements.txt`).
 - Database: **Neon Postgres** (PG 16+, so `gen_random_uuid()` is built in). The Neon Vercel integration injects
   `DATABASE_URL` (pooled, PgBouncer transaction mode) and `DATABASE_URL_UNPOOLED`. The app uses the pooled
@@ -73,7 +73,7 @@ class CapExceeded(Exception):
     def __init__(self, kind: str): ...          # kind: "daily" | "client"; store as self.kind
 
 def url() -> str | None                          # os.environ.get("DATABASE_URL") or None
-def connect(dsn: str | None = None)              # psycopg.connect(dsn or url(), connect_timeout=5, autocommit=True)
+def connect(dsn: str | None = None)              # psycopg.connect(dsn or url(), connect_timeout=5, autocommit=True, prepare_threshold=None)  (no server-side prepares through Neon's PgBouncer)
 def reserve_check(conn, *, mode: str, model: str | None, policy_sha: str, prompt_sha: str,
                   client_hash: str, doc_count: int, applicant: str,
                   daily_cap: int | None, client_cap: int | None) -> str
@@ -114,7 +114,7 @@ For example `TEST_DATABASE_URL=postgresql://localhost/postgres`. Never use the p
 
 ## Done when
 ```bash
-cd /Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments/sandro-proposal/prototype
+cd /Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments/ruri-bot/prototype
 uv pip install --python .venv/bin/python -r requirements-dev.txt
 .venv/bin/python -m pytest -q                                          # DB tests skipped without TEST_DATABASE_URL
 .venv/bin/python -m compileall -q -x '\.venv' .

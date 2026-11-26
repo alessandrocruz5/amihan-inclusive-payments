@@ -10,9 +10,9 @@ depends_on: [01]
 parallel_group: B
 files:
   create:
-    - sandro-proposal/prototype/tests/test_hardening.py
+    - ruri-bot/prototype/tests/test_hardening.py
   modify:
-    - sandro-proposal/prototype/app.py
+    - ruri-bot/prototype/app.py
   delete: []
 ---
 # 02 · App hardening (no database)
@@ -25,7 +25,7 @@ change. Keep every existing behaviour that `tests/test_app.py` checks.
 
 ## Context
 - Repo root: `/Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments`. App dir `P/` =
-  `sandro-proposal/prototype/`. Python 3.12 venv at `P/.venv`. Tests: `P/tests/` (`conftest.py` gives
+  `ruri-bot/prototype/`. Python 3.12 venv at `P/.venv`. Tests: `P/tests/` (`conftest.py` gives
   `client` and `offline` fixtures and clears `ANTHROPIC_API_KEY`/`DEMO_OFFLINE`/`VERCEL_ENV`).
 - Design rule (keep it): **the model only reads documents. Plain code + `policy.yaml` decides.** Don't
   change `PROMPT` text, `policy.yaml`, `evaluate`, `problems_for` or `gap_text`.
@@ -46,7 +46,7 @@ change. Keep every existing behaviour that `tests/test_app.py` checks.
    `^\d{4}-\d{2}-\d{2}$` that `date.fromisoformat` accepts, else `None`. `legibility_note` is `str(...)`
    truncated to 200 characters. Also guard `x` not being a dict: treat it as `{}`. Today a non-str name
    crashes `names_match` outside the per-file try (`/check` → `evaluate`), which makes the whole check a 500.
-2. **PH date:** `PH_TZ = timezone(timedelta(hours=8))` (fixed offset, no tzdata). `def today_ph(): return datetime.now(PH_TZ).date()`.
+2. **PH date:** `PH_TZ = timezone(timedelta(hours=8))` (fixed offset, no tzdata). `def today_ph(now: datetime | None = None) -> date: return (now or datetime.now(timezone.utc)).astimezone(PH_TZ).date()`.
    `/check` uses `today_ph()` instead of `date.today()`.
 3. **Time budget:** in `read_live` use `anthropic.Anthropic(timeout=25.0, max_retries=1)`. Thread pool
    `max_workers=6`. Keep the lazy import.
@@ -61,7 +61,7 @@ change. Keep every existing behaviour that `tests/test_app.py` checks.
    `'unsafe-inline'` is needed because `static/index.html` has inline `<script>` and `<style>`.
 7. **JSON on unexpected errors:** `@app.exception_handler(Exception)` returns
    `JSONResponse(status_code=500, content={"detail": "Something went wrong on the server. Try again."})`,
-   and logs with `logging.getLogger("app").exception(...)`. HTTPException keeps FastAPI's own handler.
+   and logs with `logging.getLogger("app").exception(...)`. HTTPException keeps FastAPI's own handler. Keep the security headers (change 6) in one `SECURITY_HEADERS` dict, and set them on this 500 response too. Starlette's `ServerErrorMiddleware` sits outside the http middleware, so the middleware never sees these 500s.
    In `read_one`'s except, add `log.warning("read failed: %s", type(e).__name__)`. Never log document
    content, names or keys.
 8. **Audit hashes:** at import, `POLICY_SHA = sha256(policy.yaml bytes).hexdigest()[:12]` and
@@ -77,11 +77,10 @@ change. Keep every existing behaviour that `tests/test_app.py` checks.
   Non-dict input → all defaults.
 - `/check` offline with a monkeypatched `app.read_offline` returning
   `{"doc_type":"national_id","legible":True,"name_on_document":123}` → 200 (not 500), and the identity row is `problem`.
-- `today_ph()`: with time frozen at 2026-01-01T17:00Z (monkeypatch a module-level clock or `app.datetime`),
-  it returns 2026-01-02.
+- `today_ph(datetime(2026, 1, 1, 17, 0, tzinfo=timezone.utc)) == date(2026, 1, 2)`. Also check that `today_ph()` with no argument returns a `date`.
 - Upload over the cap: two files of 2,100,000 bytes → 413.
 - `GET /docs` and `GET /openapi.json` → 404.
-- `GET /` has the CSP, `nosniff` and `X-Frame-Options` headers.
+- `GET /` has the CSP, `nosniff` and `X-Frame-Options` headers. The JSON 500 response (below) has them too.
 - `/status` has 12-hex `policy_sha` and `prompt_sha`.
 - Unexpected error → JSON 500. Monkeypatch `app.evaluate` to raise, use
   `TestClient(app.app, raise_server_exceptions=False)`, and assert `r.json()["detail"]`.
@@ -94,7 +93,7 @@ change. Keep every existing behaviour that `tests/test_app.py` checks.
 
 ## Done when
 ```bash
-cd /Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments/sandro-proposal/prototype
+cd /Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments/ruri-bot/prototype
 .venv/bin/python -m pytest -q
 .venv/bin/python -m compileall -q -x '\.venv' .
 ```

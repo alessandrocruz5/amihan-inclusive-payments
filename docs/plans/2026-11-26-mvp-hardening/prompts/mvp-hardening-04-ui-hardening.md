@@ -11,8 +11,8 @@ parallel_group: D
 files:
   create: []
   modify:
-    - sandro-proposal/prototype/static/index.html
-    - sandro-proposal/prototype/tests/test_hardening.py
+    - ruri-bot/prototype/static/index.html
+    - ruri-bot/prototype/tests/test_hardening.py
   delete: []
 ---
 # 04 · UI hardening
@@ -29,7 +29,7 @@ server versions. The current server ignores an extra `synthetic_ack` field.
 
 ## Context
 - Repo root: `/Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments`. File:
-  `sandro-proposal/prototype/static/index.html`. It's plain HTML with inline `<style>` and `<script>`, no build
+  `ruri-bot/prototype/static/index.html`. It's plain HTML with inline `<style>` and `<script>`, no build
   step and no libraries. Keep it that way: pages must stay light (thin IT / low connectivity).
 - CSP from prompt 02: `script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'`.
   No external scripts, fonts or CDNs.
@@ -44,8 +44,9 @@ server versions. The current server ignores an extra `synthetic_ack` field.
 ### Changes
 1. **Acknowledgement + notice** in the intake card, above the buttons. Add a checkbox `id="ack"` with the label
    "These are synthetic test documents, not real borrower data." Below it, a `.note` paragraph:
-   "Documents are sent to Anthropic's Claude to be read and are not stored. The applicant name and the
-   extracted results are kept for 30 days for audit. Do not upload real borrower documents."
+   "Documents are sent to Anthropic's Claude API to be read. This app does not store them; Anthropic
+   processes them under its API data terms. The applicant name and the extracted results are kept by this app
+   for 30 days for audit. Do not upload real borrower documents."
    `run()` refuses to send without `ack` checked (show in `$('err')` "Tick the box to confirm these are
    synthetic test documents."). It always appends `synthetic_ack=1` when checked. The sample button counts too:
    it ticks `ack` and then runs.
@@ -61,7 +62,10 @@ server versions. The current server ignores an extra `synthetic_ack` field.
    413 → "Upload too large for one check (4 MB).", 429 → "Usage limit reached. Try again later.",
    504 → "The check took too long. Try fewer files.", otherwise "Server error (HTTP <status>). Try again."
    When the JSON has `detail`, show it.
-5. **Reference id:** in `render(j)`, if `j.check_id` exists, show `Reference: <check_id>` in a `.note` under the
+5. **Guard the `/status` fetch** (`:93-99`, today an unguarded `r.json()`). Use the same text → `JSON.parse`
+   handling as change 4. On failure, show a neutral banner "Status unavailable. Checks may still work." and keep
+   the sample button visible.
+6. **Reference id:** in `render(j)`, if `j.check_id` exists, show `Reference: <check_id>` in a `.note` under the
    summary (new element `id="ref"`, hidden when absent).
 
 ### Test (append to `P/tests/test_hardening.py`)
@@ -74,10 +78,10 @@ server versions. The current server ignores an extra `synthetic_ack` field.
 
 ## Done when
 ```bash
-cd /Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments/sandro-proposal/prototype
+cd /Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments/ruri-bot/prototype
 .venv/bin/python -m pytest -q
 .venv/bin/python -m compileall -q -x '\.venv' .
-F="$(mktemp -t uicheck).js"; .venv/bin/python -c "import re;h=open('static/index.html').read();print(re.search(r'<script>(.*)</script>',h,re.S).group(1))" > "$F" && node --check "$F"; rm -f "$F"
+F="${TMPDIR:-/tmp}/uicheck-$$.js"; .venv/bin/python -c "import re;h=open('static/index.html').read();print(re.search(r'<script>(.*)</script>',h,re.S).group(1))" > "$F" && node --check "$F"; rm -f "$F"
 ```
 - Manual check, offline server (`DEMO_OFFLINE=1 .venv/bin/uvicorn app:app --port 8000`): the sample button
   renders the gap list. With `ack` unticked, "Check file" shows the confirm message. A 5 MB phone JPEG is sent

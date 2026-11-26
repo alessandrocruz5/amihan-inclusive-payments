@@ -11,15 +11,15 @@ parallel_group: A
 files:
   create:
     - .gitignore
-    - sandro-proposal/prototype/.python-version
-    - sandro-proposal/prototype/requirements-dev.txt
-    - sandro-proposal/prototype/tests/conftest.py
-    - sandro-proposal/prototype/tests/test_app.py
+    - ruri-bot/prototype/.python-version
+    - ruri-bot/prototype/requirements-dev.txt
+    - ruri-bot/prototype/tests/conftest.py
+    - ruri-bot/prototype/tests/test_app.py
   modify:
-    - sandro-proposal/prototype/requirements.txt
+    - ruri-bot/prototype/requirements.txt
   delete:
-    - sandro-proposal/prototype/__pycache__/app.cpython-315.pyc   # untrack only (git rm --cached)
-    - sandro-proposal/.DS_Store                                    # untrack only (git rm --cached)
+    - ruri-bot/prototype/__pycache__/app.cpython-315.pyc   # untrack only (git rm --cached)
+    - ruri-bot/.DS_Store                                    # untrack only (git rm --cached)
 ---
 # 01 · Test baseline, pinning, repo hygiene
 
@@ -30,7 +30,7 @@ this baseline.
 
 ## Context
 - Repo root: `/Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments` (git, branch `main`).
-  App dir (`P/`): `sandro-proposal/prototype/`. All commands below run from `P/` unless stated.
+  App dir (`P/`): `ruri-bot/prototype/`. All commands below run from `P/` unless stated.
 - The app is a FastAPI module `app.py` with `app = FastAPI(...)` at module level. Endpoints: `GET /`,
   `GET /status`, `POST /check` (multipart form: `applicant`, `use_samples`, `files`). `mode()` reads env **at
   call time**: `ANTHROPIC_API_KEY` set → `live`; `DEMO_OFFLINE=1` → `offline`; else `none` (`/check` → 503).
@@ -39,13 +39,13 @@ this baseline.
   sorted `unrecognised` list.
 - The current `.venv` is Python 3.15 and is **not** tracked (it has its own `.gitignore`). Vercel and CI will
   use 3.12.
-- The repo has no `.gitignore`. Tracked junk: `sandro-proposal/prototype/__pycache__/app.cpython-315.pyc`,
-  `sandro-proposal/.DS_Store`.
+- The repo has no `.gitignore`. Tracked junk: `ruri-bot/prototype/__pycache__/app.cpython-315.pyc`,
+  `ruri-bot/.DS_Store`.
 
 ### Steps
 1. **`.gitignore`** at the repo root:
    `.venv/`, `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.DS_Store`, `.env`, `.env.*`, `!.env.example`, `.vercel/`.
-   Then `git rm --cached sandro-proposal/prototype/__pycache__/app.cpython-315.pyc sandro-proposal/.DS_Store`
+   Then `git rm --cached ruri-bot/prototype/__pycache__/app.cpython-315.pyc ruri-bot/.DS_Store`
    (this untracks the files and leaves them on disk; don't commit).
 2. **`P/.python-version`** containing exactly `3.12`.
 3. **Rebuild the venv on 3.12:** `rm -rf .venv && uv venv --python 3.12 .venv`.
@@ -85,7 +85,7 @@ this baseline.
 
 ## Done when
 ```bash
-cd /Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments/sandro-proposal/prototype
+cd /Users/alessandrocruz/Code/talino-fintech-foundry/amihan-inclusive-payments/ruri-bot/prototype
 .venv/bin/python --version                        # Python 3.12.x
 .venv/bin/python -m pytest -q                     # all pass
 .venv/bin/python -m compileall -q -x '\.venv' .
