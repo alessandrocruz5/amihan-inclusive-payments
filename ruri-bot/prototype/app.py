@@ -52,7 +52,7 @@ Return ONLY a JSON object with these keys:
   "expiry_date": YYYY-MM-DD or null (only if an expiry/validity date is printed).
 Do not guess values you cannot read: use null."""
 
-app = FastAPI(title="Agri loan gap list (prototype)")
+app = FastAPI(title="RuriBot: agri loan gap list (prototype)")
 
 
 def mode():

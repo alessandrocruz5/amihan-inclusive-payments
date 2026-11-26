@@ -1,4 +1,4 @@
-# Agri loan gap-list prototype
+# RuriBot: agri loan gap-list prototype
 
 Upload a farmer's documents, get one list of what is missing or wrong, cited to the checklist.
 The model only reads documents. `policy.yaml` and plain code decide what is required.
